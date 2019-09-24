@@ -1,5 +1,6 @@
 pub use std::time::Duration;
 
+pub mod backlight;
 pub mod base;
 pub mod bspwm;
 pub mod datetime;

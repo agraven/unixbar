@@ -1,4 +1,6 @@
 extern crate chrono;
+extern crate crossbeam_channel;
+extern crate epoll;
 #[macro_use]
 extern crate nom;
 #[cfg(target_os = "linux")]
@@ -6,6 +8,7 @@ extern crate alsa;
 #[cfg(feature = "dbus")]
 extern crate dbus;
 extern crate libc;
+extern crate notify;
 #[cfg(feature = "systemstat")]
 extern crate systemstat;
 #[cfg(feature = "xkb")]

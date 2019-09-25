@@ -33,20 +33,13 @@ fn read_value(file: &str) -> Result<u32, io::Error> {
 /// Writes a value to the kernel backlight interface
 fn write_value(file: &str, value: u32) -> Result<(), io::Error> {
     let dir = backlight_dir()?;
-    let mut fd = match fs::File::create(&dir.join(file)) {
-        Ok(fd) => fd,
-        Err(e) => match e.kind() {
-            io::ErrorKind::PermissionDenied => {
-                eprintln!("Add write permission");
-                return Err(e);
-            }
-            _ => return Err(e),
-        },
-    };
+    let mut fd = fs::File::create(&dir.join(file))?;
     write!(fd, "{}", value)
 }
 
 type F = dyn Fn() -> Format + Send + Sync + 'static;
+
+/// Widget that gets and sets the screen's brightness value
 pub struct Backlight {
     last_value: Arc<RwLock<Format>>,
     updater: Arc<Box<F>>,
@@ -86,7 +79,8 @@ impl Backlight {
         let brightness = read_value("brightness")?;
         let max = read_value("max_brightness")?;
         let new = brightness + (max as f32 * percent as f32) as u32;
-        write_value("brightness", new)
+        // Min is to prevent accidentally blackening the screen
+        write_value("brightness", new.max(1))
     }
 }
 
@@ -98,25 +92,23 @@ impl Widget for Backlight {
     fn spawn_notifier(&mut self, tx: Sender<()>) {
         let updater = self.updater.clone();
         let last_value = self.last_value.clone();
-        let mut logfile = fs::File::create("bars-log").unwrap();
 
         let (_, rx2) = self.channel.clone();
-        self.watcher
-            .watch(
-                backlight_dir().unwrap().join("brightness"),
-                RecursiveMode::NonRecursive,
-            )
-            .unwrap();
+        for entry in fs::read_dir(Path::new("/sys/class/backlight")).unwrap() {
+            let dir = entry.unwrap().path();
+            let file = dir.join("brightness");
+            self.watcher
+                .watch(file, RecursiveMode::NonRecursive)
+                .unwrap();
+        }
 
         thread::spawn(move || loop {
             match rx2.recv() {
                 Ok(ref event) if *event.op.as_ref().unwrap() == Op::WRITE => {
-                    write!(logfile, "received event").unwrap();
                     tx.send(());
                     let mut writer = last_value.write().unwrap();
                     *writer = (*updater)();
                 }
-                Err(e) => write!(logfile, "Receiving failed: {}", e).unwrap(),
                 _ => (),
             }
         });

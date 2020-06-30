@@ -36,7 +36,7 @@ fn extract_i64(item: &MessageItem) -> Option<i64> {
 fn extract_str(item: &MessageItem) -> Option<String> {
     match *item {
         MessageItem::Str(ref x) => Some((*x).clone()),
-        MessageItem::Array(ref x, _) => Some(
+        MessageItem::Array(ref x) => Some(
             x.iter()
                 .map(|y| extract_str(y).unwrap_or_default())
                 .collect::<Vec<_>>()
@@ -140,7 +140,7 @@ where
                     )
                     .get_all()
                     {
-                        if let Some(&MessageItem::Array(ref metas, _)) = props.get("Metadata") {
+                        if let Some(&MessageItem::Array(ref metas)) = props.get("Metadata") {
                             let state = SongInfo {
                                 title: get_entry(metas, "xesam:title")
                                     .and_then(|m| extract_str(m))
@@ -187,7 +187,7 @@ where
 
                             let mut writer = last_value.write().unwrap();
                             *writer = (*updater)(state);
-                            tx.send(());
+                            tx.send(()).unwrap();
                         }
                     }
                 } else {
@@ -202,7 +202,7 @@ where
                         musicbrainz_album: None,
                         playback: None,
                     });
-                    tx.send(());
+                    tx.send(()).unwrap();
                     thread::sleep(Duration::from_millis(1000)); // more sleepy without player
                 }
 

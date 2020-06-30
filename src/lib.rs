@@ -1,5 +1,6 @@
 extern crate chrono;
-extern crate crossbeam_channel;
+#[macro_use]
+extern crate crossbeam_channel as channel;
 extern crate epoll;
 #[macro_use]
 extern crate nom;
@@ -8,15 +9,15 @@ extern crate alsa;
 #[cfg(feature = "dbus")]
 extern crate dbus;
 extern crate libc;
+#[cfg(target_os = "linux")]
+extern crate libpulse_binding as pulse;
 extern crate notify;
+extern crate serde;
+extern crate serde_json;
 #[cfg(feature = "systemstat")]
 extern crate systemstat;
 #[cfg(feature = "xkb")]
 extern crate xcb;
-#[macro_use]
-extern crate chan;
-extern crate serde;
-extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 
@@ -29,8 +30,8 @@ pub use widget::*;
 
 pub struct UnixBar<F: Formatter> {
     formatter: F,
-    widgets: Vec<Box<Widget>>,
-    fns: BTreeMap<String, Box<FnMut()>>,
+    widgets: Vec<Box<dyn Widget>>,
+    fns: BTreeMap<String, Box<dyn FnMut()>>,
 }
 
 impl<F: Formatter> UnixBar<F> {
@@ -50,32 +51,32 @@ impl<F: Formatter> UnixBar<F> {
         self
     }
 
-    pub fn add(&mut self, widget: Box<Widget>) -> &mut UnixBar<F> {
+    pub fn add(&mut self, widget: Box<dyn Widget>) -> &mut UnixBar<F> {
         self.widgets.push(widget);
         self
     }
 
     pub fn run(&mut self) {
-        let (wid_tx, wid_rx) = chan::async();
+        let (wid_tx, wid_rx) = channel::unbounded();
         for widget in &mut self.widgets {
             widget.spawn_notifier(wid_tx.clone());
         }
         self.show();
-        let (stdin_tx, stdin_rx) = chan::async();
+        let (stdin_tx, stdin_rx) = channel::unbounded();
         std::thread::spawn(move || {
             let stdin = std::io::stdin();
             let mut line = String::new();
             loop {
                 line.clear();
                 if stdin.read_line(&mut line).is_ok() {
-                    stdin_tx.send(line.clone());
+                    stdin_tx.send(line.clone()).unwrap();
                 }
             }
         });
         loop {
-            chan_select! {
-                wid_rx.recv() => self.show(),
-                stdin_rx.recv() -> line => self.formatter.handle_stdin(line, &mut self.fns),
+            select! {
+                recv(wid_rx) -> _ => self.show(),
+                recv(stdin_rx) -> line => self.formatter.handle_stdin(line.ok(), &mut self.fns),
             }
         }
     }

@@ -141,7 +141,7 @@ where
                 {
                     let mut writer = last_value.write().unwrap();
                     *writer = (*updater)(state);
-                    tx.send(());
+                    tx.send(()).unwrap();
                 }
 
                 // Wait for event

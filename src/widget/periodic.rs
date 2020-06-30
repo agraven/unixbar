@@ -28,7 +28,7 @@ where
                 let mut writer = last_value.write().unwrap();
                 *writer = (*updater)();
             }
-            tx.send(());
+            tx.send(()).unwrap();
         });
     }
 }

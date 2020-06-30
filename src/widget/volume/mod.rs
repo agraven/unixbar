@@ -8,8 +8,12 @@ pub mod alsa;
 pub use self::alsa::{default_volume, ALSA};
 #[cfg(target_os = "freebsd")]
 pub mod freebsd;
+#[cfg(target_os = "linux")]
+pub mod pulse;
 #[cfg(target_os = "freebsd")]
 pub use self::freebsd::{default_volume, FreeBSDSound};
+#[cfg(target_os = "linux")]
+pub use self::pulse::Pulse;
 
 pub struct VolumeState {
     pub volume: f32,

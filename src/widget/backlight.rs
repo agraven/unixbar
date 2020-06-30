@@ -1,5 +1,4 @@
-use crossbeam_channel as cb_chan;
-use notify::{immediate_watcher, Op, RawEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{immediate_watcher, EventKind::Modify, RecommendedWatcher, RecursiveMode, Watcher};
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -43,15 +42,24 @@ type F = dyn Fn() -> Format + Send + Sync + 'static;
 pub struct Backlight {
     last_value: Arc<RwLock<Format>>,
     updater: Arc<Box<F>>,
-    channel: (cb_chan::Sender<RawEvent>, cb_chan::Receiver<RawEvent>),
+    channel: (
+        channel::Sender<notify::Event>,
+        channel::Receiver<notify::Event>,
+    ),
     watcher: RecommendedWatcher,
 }
 
 impl Backlight {
     pub fn new(updater: impl Fn() -> Format + Send + Sync + 'static) -> Box<Backlight> {
         let val = updater();
-        let (tx, rx) = cb_chan::unbounded();
-        let watcher = immediate_watcher(tx.clone()).unwrap();
+        let (tx, rx) = channel::unbounded();
+        let tx_clone = tx.clone();
+        let watcher = immediate_watcher(move |event: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = event {
+                tx_clone.send(event).expect("channel error");
+            }
+        })
+        .unwrap();
         Box::new(Backlight {
             last_value: Arc::new(RwLock::new(val)),
             updater: Arc::new(Box::new(updater)),
@@ -93,22 +101,26 @@ impl Widget for Backlight {
         let updater = self.updater.clone();
         let last_value = self.last_value.clone();
 
-        let (_, rx2) = self.channel.clone();
-        for entry in fs::read_dir(Path::new("/sys/class/backlight")).unwrap() {
-            let dir = entry.unwrap().path();
-            let file = dir.join("brightness");
-            self.watcher
-                .watch(file, RecursiveMode::NonRecursive)
-                .unwrap();
-        }
+        let rx2 = self.channel.1.clone();
+        // set watcher to watch file with brightness value, return if non-existant.
+        match backlight_dir().map(|dir| dir.join("brightness")) {
+            Ok(dir) => self
+                .watcher
+                .watch(dir, RecursiveMode::NonRecursive)
+                .unwrap(),
+            _ => return,
+        };
 
         thread::spawn(move || loop {
             match rx2.recv() {
-                Ok(ref event) if *event.op.as_ref().unwrap() == Op::WRITE => {
-                    tx.send(());
-                    let mut writer = last_value.write().unwrap();
-                    *writer = (*updater)();
-                }
+                Ok(event) => match event.kind {
+                    Modify(_) => {
+                        tx.send(()).unwrap();
+                        let mut writer = last_value.write().unwrap();
+                        *writer = (*updater)();
+                    }
+                    _ => (),
+                },
                 _ => (),
             }
         });

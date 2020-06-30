@@ -78,7 +78,7 @@ pub trait Formatter {
         line
     }
 
-    fn handle_stdin(&self, _line: Option<String>, _fns: &mut BTreeMap<String, Box<FnMut()>>) {}
+    fn handle_stdin(&self, _line: Option<String>, _fns: &mut BTreeMap<String, Box<dyn FnMut()>>) {}
 }
 
 #[macro_export]

@@ -32,7 +32,7 @@ impl Formatter for I3BarFormatter {
         line
     }
 
-    fn handle_stdin(&self, line: Option<String>, fns: &mut BTreeMap<String, Box<FnMut()>>) {
+    fn handle_stdin(&self, line: Option<String>, fns: &mut BTreeMap<String, Box<dyn FnMut()>>) {
         // Parse click if there is one
         let click: I3Click = match line.map(|s| serde_json::from_str(&s.trim_matches(','))) {
             Some(Ok(click)) => click,

@@ -110,7 +110,7 @@ where
                     let line = line.unwrap_or_default();
                     if let IResult::Done(_, result) = bspstr(&line.into_bytes()) {
                         *writer = (*updater)(result);
-                        tx.send(());
+                        tx.send(()).unwrap();
                     }
                 }
                 thread::sleep(Duration::from_millis(500));

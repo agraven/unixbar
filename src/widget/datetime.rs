@@ -17,7 +17,7 @@ impl Widget for DateTime {
         let seconds = if self.format.contains("%S") { 1 } else { 60 };
         thread::spawn(move || loop {
             thread::sleep(Duration::from_secs(seconds));
-            tx.send(());
+            tx.send(()).unwrap();
         });
     }
 }

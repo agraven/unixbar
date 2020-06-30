@@ -35,7 +35,7 @@ where
                     *writer = (*formatter)(measurement.done());
                     measurement = (*updater)();
                 }
-                tx.send(());
+                tx.send(()).unwrap();
             }
         });
     }

@@ -1,4 +1,4 @@
-pub use chan::Sender;
+pub use channel::Sender;
 use format::data::Format;
 
 pub trait Widget {

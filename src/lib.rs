@@ -24,8 +24,12 @@ extern crate serde_derive;
 pub mod format;
 pub mod widget;
 
+use std::{
+    collections::BTreeMap,
+    io::{BufRead, StdoutLock, Write},
+};
+
 pub use format::*;
-use std::collections::BTreeMap;
 pub use widget::*;
 
 pub struct UnixBar<F: Formatter> {
@@ -58,13 +62,17 @@ impl<F: Formatter> UnixBar<F> {
 
     pub fn run(&mut self) {
         let (wid_tx, wid_rx) = channel::unbounded();
+        let stdout = std::io::stdout();
+        let mut stdout = stdout.lock();
+
         for widget in &mut self.widgets {
             widget.spawn_notifier(wid_tx.clone());
         }
-        self.show();
+        self.show(&mut stdout);
         let (stdin_tx, stdin_rx) = channel::unbounded();
         std::thread::spawn(move || {
             let stdin = std::io::stdin();
+            let mut stdin = stdin.lock();
             let mut line = String::new();
             loop {
                 line.clear();
@@ -75,15 +83,15 @@ impl<F: Formatter> UnixBar<F> {
         });
         loop {
             select! {
-                recv(wid_rx) -> _ => self.show(),
+                recv(wid_rx) -> _ => self.show(&mut stdout),
                 recv(stdin_rx) -> line => self.formatter.handle_stdin(line.ok(), &mut self.fns),
             }
         }
     }
 
-    fn show(&mut self) {
+    fn show(&mut self, stdout: &mut StdoutLock) {
         let vals: Vec<Format> = self.widgets.iter().map(|ref w| w.current_value()).collect();
         let line = self.formatter.format_all(&vals);
-        println!("{}", line.replace("\n", ""));
+        let _ = writeln!(stdout, "{}", line.replace("\n", ""));
     }
 }
